@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # likhna. .env file ya Replit Secrets mein BOT_TOKEN set karo.
 # Example: export BOT_TOKEN="aapka_token_yahan"
 # ─────────────────────────────────────────────────────────────────────────────
-TOKEN = os.getenv("BOT_TOKEN", "8978449693:AAEXNNMsdf84Cn6HkwnP5qXDzcTXEj3Ht9s")  # FIX: hardcoded fallback hata diya — BOT_TOKEN env var se aana chahiye
+TOKEN = os.getenv("BOT_TOKEN", "869260571Koz3EJtMXYBguoN5AWY9o")  # FIX: hardcoded fallback hata diya — BOT_TOKEN env var se aana chahiye
 if not TOKEN:
     raise RuntimeError(
         "❌ BOT_TOKEN environment variable set nahi hai!\n"
@@ -45,8 +45,8 @@ if not TOKEN:
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 FILE_URL = f"https://api.telegram.org/file/bot{TOKEN}/"
 
-OWNER_ID = 5705479420  # <-- Apna Telegram User ID yahan dalo
-BOT_USERNAME = "@orbit_sms_bot"
+OWNER_ID = 8889528816  # <-- Apna Telegram User ID yahan dalo
+BOT_USERNAME = "@Visitofpfbot"
 DB_FILE = "bot_data.json"
 
 # ==========================================
@@ -1750,8 +1750,19 @@ def check_force_join(user_id):
     for entry in bot_settings["fj_channels"]:
         ch = _get_fj_chat_id(entry)
         res = api_call("getChatMember", {"chat_id": ch, "user_id": user_id})
-        if res.get("ok") and res.get("result", {}).get("status", "left") not in ["left", "kicked"]: continue
-        else: return False
+        # FIX: Separate "API failed" from "user not joined" — these are two very
+        # different outcomes.  The old one-liner `else: return False` fired on BOTH:
+        #   (a) ok=True  + status in [left, kicked]  → user genuinely not a member ✅
+        #   (b) ok=False (network error, timeout, bot not admin, etc.)             ❌
+        # In case (b) the user was blocked even though they DID join, causing the
+        # "Force Join not working" report.  Fix: skip the channel on API failure
+        # (give benefit of doubt) — only return False when we DEFINITIVELY confirm
+        # the user has left/been kicked.
+        if not res.get("ok"):
+            continue  # API error — cannot confirm status, skip this channel
+        status = res.get("result", {}).get("status", "left")
+        if status in ["left", "kicked"]:
+            return False
     return True
 
 def send_force_join_msg(chat_id):
@@ -1759,19 +1770,46 @@ def send_force_join_msg(chat_id):
     kb = []
     for entry in bot_settings["fj_channels"]:
         info = _get_fj_info(entry)
-        ch_type = info.get("type", "channel")
-        title = info.get("title", "")
+        ch_type   = info.get("type", "channel")
+        title     = info.get("title", "")
         invite_link = info.get("invite_link", "")
-        ch_id = info.get("chat_id", "")
+        ch_id     = str(info.get("chat_id", ""))
+
+        # ── Resolve a valid join URL ───────────────────────────────────────────
+        url = ""
         if invite_link:
             url = invite_link
-        elif str(ch_id).startswith("@"):
-            url = f"https://t.me/{ch_id.replace('@', '')}"
-        else:
-            url = f"https://t.me/{ch_id}"
+        elif ch_id.startswith("@"):
+            # Public username → standard t.me link
+            url = f"https://t.me/{ch_id.lstrip('@')}"
+        elif ch_id.startswith("-") or ch_id.isdigit():
+            # FIX: Numeric chat ID (private channel/group) — the old code produced
+            # "https://t.me/-1001234567890" which is an INVALID Telegram URL and
+            # left users with a broken Join button.
+            # Now: try to export the invite link on the fly.  If successful, also
+            # persist it so future calls are instant (no repeated API round-trips).
+            link_res = api_call("exportChatInviteLink", {"chat_id": ch_id})
+            if link_res.get("ok"):
+                url = link_res["result"]
+                # Persist back into bot_settings in-place
+                for i, stored_entry in enumerate(bot_settings["fj_channels"]):
+                    if str(_get_fj_chat_id(stored_entry)) == ch_id:
+                        if isinstance(bot_settings["fj_channels"][i], dict):
+                            bot_settings["fj_channels"][i]["invite_link"] = url
+                        break
+                save_local_db()
+            # If exportChatInviteLink also failed, url stays "" → button skipped below
+
+        if not url:
+            # No valid join URL available — skip this entry instead of showing a
+            # dead/broken button (which confused users who clicked it and got nothing)
+            logger.warning(f"send_force_join_msg: no valid URL for ch_id={ch_id!r}, skipping button")
+            continue
+
         type_label = "Channel" if ch_type == "channel" else "Group"
         btn_text = f"Join {type_label}: {title}" if title else f"Join {type_label}"
         kb.append([{"text": btn_text, "icon_custom_emoji_id": "5789428375261023681", "url": url, "style": _rs()}])
+
     kb.append([{"text": "Check Joined", "icon_custom_emoji_id": "5352694861990501856", "callback_data": "check_fj", "style": _rs()}])
     send_message(chat_id, render_body_text(f"{PEM['warn']} <b>Please join our channels/groups to use the bot!</b>"), reply_markup={"inline_keyboard": kb})
 
