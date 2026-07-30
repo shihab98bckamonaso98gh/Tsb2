@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # likhna. .env file ya Replit Secrets mein BOT_TOKEN set karo.
 # Example: export BOT_TOKEN="aapka_token_yahan"
 # ─────────────────────────────────────────────────────────────────────────────
-TOKEN = os.getenv("BOT_TOKEN", "8692605HAsKoz3EOp8HJtMXYBguoN5AWY9o")  # FIX: hardcoded fallback hata diya — BOT_TOKEN env var se aana chahiye
+TOKEN = os.getenv("BOT_TOKEN", "8978449693:AAEXNNMsdf84Cn6HkwnP5qXDzcTXEj3Ht9s")  # FIX: hardcoded fallback hata diya — BOT_TOKEN env var se aana chahiye
 if not TOKEN:
     raise RuntimeError(
         "❌ BOT_TOKEN environment variable set nahi hai!\n"
@@ -45,8 +45,8 @@ if not TOKEN:
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 FILE_URL = f"https://api.telegram.org/file/bot{TOKEN}/"
 
-OWNER_ID = 8889528816  # <-- Apna Telegram User ID yahan dalo
-BOT_USERNAME = "@Visitofpfbot"
+OWNER_ID = 5705479420  # <-- Apna Telegram User ID yahan dalo
+BOT_USERNAME = "@orbit_sms_bot"
 DB_FILE = "bot_data.json"
 
 # ==========================================
