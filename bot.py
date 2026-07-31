@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # likhna. .env file ya Replit Secrets mein BOT_TOKEN set karo.
 # Example: export BOT_TOKEN="aapka_token_yahan"
 # ─────────────────────────────────────────────────────────────────────────────
-TOKEN = os.getenv("BOT_TOKEN", "8978449693:AAEXNNMsdf84Cn6HkwnP5qXDzcTXEj3Ht9s")  # FIX: hardcoded fallback hata diya — BOT_TOKEN env var se aana chahiye
+TOKEN = os.getenv("BOT_TOKEN", "8280002802:AAFoZgWnv5Qi4cuciCpIDMayiDh7jcW0p0M")  # FIX: hardcoded fallback hata diya — BOT_TOKEN env var se aana chahiye
 if not TOKEN:
     raise RuntimeError(
         "❌ BOT_TOKEN environment variable set nahi hai!\n"
