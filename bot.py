@@ -1462,9 +1462,16 @@ def get_flag_info_html(num_or_iso):
 _MASK_EMOJI = '<tg-emoji emoji-id="6228781436330054904">⭐</tg-emoji>'
 
 def mask_number(num, user_id=None):
-    """Return last 4 digits of number — plain, no emoji masking."""
-    clean = num.replace("+", "").replace(" ", "")
-    if len(clean) > 4: return clean[-4:]
+    """Return number as: first 4 digits + premium star emoji + last 5 digits.
+    Middle digits are hidden — used in group messages for privacy."""
+    clean = str(num).replace("+", "").replace(" ", "").replace("-", "")
+    MASK = '<tg-emoji emoji-id="6228781436330054904">⭐</tg-emoji>'
+    if len(clean) >= 10:
+        # e.g. 9779801234567 → 9779⭐34567
+        return f"{clean[:4]}{MASK}{clean[-5:]}"
+    elif len(clean) >= 6:
+        mid = len(clean) // 2
+        return f"{clean[:mid]}{MASK}{clean[mid:]}"
     return clean
 
 # ==========================================
@@ -2804,7 +2811,8 @@ def _process_panel_otps(idx, p, parsed_data):
             masked = mask_number(display_num, user_id=first_owner)
 
             # GROUP: har naya unique OTP group mein jaaye
-            group_raw = f"{get_flag_info_html(display_num)} #{iso} ♦ {masked} ✅ {otp}"
+            # NEW FORMAT: {flag} #{iso} {app_logo} {first4}⭐{last5}  — OTP only in button
+            group_raw = f"{get_flag_info_html(display_num)} #{iso} {prem_app_html} {masked}"
             group_msg = render_body_text(group_raw)
 
             # FIX: Har group send apne try-except mein — ek fail ho toh baaki aur user delivery block na ho
@@ -2844,16 +2852,16 @@ def _process_panel_otps(idx, p, parsed_data):
             # FIX: Har owner apne try-except mein — ek fail ho toh baaki owners block na hon
             for owner_id in owners:
                 try:
+                    # NEW INBOX FORMAT: {flag} #{iso} ♦ {app_logo} {full_number}
+                    # OTP only in copy-button — no OTP text in message body
                     inbox_msg = render_body_text(
-                        f"{get_flag_info_html(display_num)} #{iso} ♦ {display_num} ✅ {otp}")
+                        f"{get_flag_info_html(display_num)} #{iso} ♦ {prem_app_html} {display_num}")
                     _reset_btn_counter()
                     inbox_kb = _make_otp_kb(otp)
                     reward = float(bot_settings.get("otp_reward", 0.0))
                     if reward > 0:
                         update_balance(owner_id, reward)
-                        inbox_kb.append([{"text": f"Added {reward} ₹",
-                                          "icon_custom_emoji_id": "5420396762189831222",
-                                          "callback_data": "ignore", "style": _rs()}])
+                        # Reward credited silently — button removed per new message design
                     send_message(owner_id, inbox_msg, reply_markup={"inline_keyboard": inbox_kb})
                     _increment_local_user(owner_id, "total_otps", 1)
                 except Exception as e:
@@ -4068,7 +4076,8 @@ def _deliver_otp_to_user(owner_id, num_str, app_full_name, prem_app_html, iso, o
     masked = mask_number(display_num, user_id=owner_id)
     # Group delivery pehle karo — owner_id None hone se group block nahi hoga
     # Group mein masked number (privacy) — user DM mein full number
-    group_msg = render_body_text(f"{get_flag_info_html(display_num)} #{iso} ♦ {masked} ✅ {otp_code}")
+    # NEW GROUP FORMAT: {flag} #{iso} {app_logo} {first4}⭐{last5}  — OTP only in button
+    group_msg = render_body_text(f"{get_flag_info_html(display_num)} #{iso} {prem_app_html} {masked}")
     # ✅ OTP Group mein deliver karo (Forward Groups) — owner required NAHI
     for fw in bot_settings.get("fw_groups", []):
         try:
@@ -4090,13 +4099,15 @@ def _deliver_otp_to_user(owner_id, num_str, app_full_name, prem_app_html, iso, o
     # ✅ User ke personal chat mein deliver karo — sirf tab jab owner mila ho
     if not owner_id:
         return
-    display_msg = render_body_text(f"{get_flag_info_html(display_num)} #{iso} ♦ {display_num} ✅ {otp_code}")
+    # NEW INBOX FORMAT: {flag} #{iso} ♦ {app_logo} {full_number}
+    # OTP only in copy-button — no OTP text / no money button in message body
+    display_msg = render_body_text(f"{get_flag_info_html(display_num)} #{iso} ♦ {prem_app_html} {display_num}")
     _reset_btn_counter()
     inbox_kb = _make_otp_kb(otp_code)
     reward = float(bot_settings.get("otp_reward", 0.0))
     if reward > 0:
         update_balance(owner_id, reward)
-        inbox_kb.append([{"text": f"Added {reward} ₹", "icon_custom_emoji_id": "5420396762189831222", "callback_data": "ignore", "style": _rs()}])
+        # Reward credited silently — "Added ₹" button removed per new message design
         logger.debug(f"OTP reward {reward} credited to user {owner_id}")
     try:
         send_message(owner_id, display_msg, reply_markup={"inline_keyboard": inbox_kb})
@@ -6896,7 +6907,8 @@ def _handle_callback_inner(call):
                     lang = detect_language(msg)
                     masked = mask_number(display_num)
                     otp_msg = render_body_text(
-                        f"{get_flag_info_html(display_num)} #{iso} ♦ {masked} ✅ {otp}"
+                        # NEW GROUP FORMAT: {flag} #{iso} {app_logo} {first4}⭐{last5}
+                        f"{get_flag_info_html(display_num)} #{iso} {prem_app_html} {masked}"
                     )
                     _reset_btn_counter()
                     kb = [
